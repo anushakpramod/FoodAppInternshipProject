@@ -1,31 +1,24 @@
 import React, { useState,useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-
+import { deleteRestaurant } from "../redux/actions/restaurantAction";
 
 const Restaurant = ({ restaurant }) => {
+  const dispatch = useDispatch();
   const [showAI, setShowAI] = useState(false);
 
-  const dispatch = useDispatch();
+  const { isAuthenticated, user } = useSelector(
+    (state) => state.user || {}
+  );
 
-  // const { isAuthenticated, user } = useSelector(
-  //   (state) => state.auth || {}
-  // );
+  //DELETE
+  const handleDelete = () => {
+    if (!window.confirm("Delete this restaurant?")) return;
 
-  // const handleDelete = () => {
-  //   if (!window.confirm("Delete this restaurant?")) return;
-
-  //   dispatch(deleteRestaurant(restaurant._id))
-  //     .unwrap()
-  //     .then(() => {
-  //       // optional: refetch (not needed since we updated state already)
-  //       // dispatch(getRestaurants());
-  //     })
-  //     .catch((err) => {
-  //       alert(err || "Unable to delete");
-  //     });
-  // };
-
+    dispatch(deleteRestaurant(restaurant._id)).catch(() => {
+      alert("Unable to delete");
+    });
+  };
   return (
     <div className="col-12 my-3">
     <div className="card restaurant-card p-3">
@@ -116,6 +109,15 @@ const Restaurant = ({ restaurant }) => {
     )}
 
 </div>
+
+ {isAuthenticated && user && user.role === "admin" && (
+            <button
+              className="btn btn-danger btn-sm mt-2"
+              onClick={handleDelete}
+            >
+              Delete
+            </button>
+          )}
     </div>
   );
 };

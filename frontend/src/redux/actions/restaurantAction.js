@@ -1,60 +1,73 @@
-import api from "../../utils/api"
+//user opens app
+//we need restaurant data from Backend
+//API call happens
+//data stored in redux
+//UI updates automatically
 
-import{
-    getRestaurantsRequest,
-    getRestaurantsSuccess,
-    getRestaurantsFail,
+import { createAsyncThunk } from "@reduxjs/toolkit";
+import api from "../../utils/api";
 
-    createRestaurantRequest,
-    createRestaurantSuccess,
-    createRestaurantFail,
+//get all restaurants
+export const getRestaurants = createAsyncThunk(
+    "restaurants/getRestaurants",async(keyword =" ",{rejectWithValue}) =>{
+       try{
+        //API call
+        const {data} = await api.get(`/v1/eats/stores?keyword=${keyword}`);
+        console.log("Fetched restaurants",data);
+        return {
+            restaurants : data.restaurants,
+            count : data.count,
+        }
+       }catch(error){
+         return rejectWithValue(error.response?.data?.message || error.message);
+       }
+    })
 
-    deleteRestaurantRequest,
-    deleteRestaurantSuccess,
-    deleteRestaurantFail,
-
-} from "../slices/restaurantSlice"
-
-//get
-export const getRestaurants =(keyword="") => async(dispatch) =>{
+ //create restaurant - admin
+ 
+ export const createRestaurant = createAsyncThunk(
+  "restaurants/createRestaurant", async(restaurantData,{rejectWithValue}) =>{
     try{
-     dispatch(getRestaurantsRequest());
-     const {data} = await api.get(`/v1/eats/stores?keyword=${keyword}`);
-     dispatch(getRestaurantsSuccess({
-        restaurants:data.restaurant,
-        count:data.count
-     }))
+      const {data} = await api.post("/v1/eats/stores", restaurantData);
+      return data;
     }catch(error){
-      dispatch(getRestaurantsFail(error.response?.data?.message || error.message))
+        return rejectWithValue(error.response?.data?.message || error.message)
     }
-}
 
-//create
-export const createRestaurant = (restaurantData) => async(dispatch)=>{
+  }
+ )
+
+ //delete restaurant
+
+  export const deleteRestaurant = createAsyncThunk(
+  "restaurants/deleteRestaurant", async(id,{rejectWithValue}) =>{
     try{
-       dispatch(createRestaurantRequest())
-
-       const {data} = await api.post("/v1/eats/stores", restaurantData);
-
-       dispatch(createRestaurantSuccess(data.data));
-
+      const {data} = await api.delete(`/v1/eats/stores/${id}`);
+      return {
+        id,
+        message:data.message
+      };
+    }catch(error){
+        return rejectWithValue(error.response?.data?.message || error.message)
     }
-    catch(error){
-     dispatch(createRestaurantFail(error.response?.data?.message || error.message))
-    }
-}
 
-//delete
-export const deleteRestaurant = (id) => async(dispatch)=>{
+  }
+ )
+
+ export const analyzeReviews = createAsyncThunk(
+  "restuarants/analyzeReviews", async(id, {rejectWithValue}) =>{
     try{
-       dispatch(deleteRestaurantRequest())
+      const {data} = await api.put(`/v1/ai/admin/restaurants/${id}/analyze`)
 
-      await api.delete(`/v1/eats/stores/${id}`);
+      return{
+        restaurantId: id,
+        aiData:data.aiData
+      }
 
-       dispatch(deleteRestaurantSuccess(id));
+    }catch(error){
+      return rejectWithValue(error.response?.data?.message || "AI failed")
 
     }
-    catch(error){
-     dispatch(deleteRestaurantFail(error.response?.data?.message || error.message))
-    }
-}
+  }
+ )
+

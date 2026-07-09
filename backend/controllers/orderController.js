@@ -1,88 +1,119 @@
 const Order = require("../models/order");
-const FoodItem = require("../models/foodItem");
 const Cart = require("../models/cartModel");
-const { ObjectId } = require("mongodb");
 const ErrorHandler = require("../utils/errorHandler");
 const catchAsyncErrors = require("../middlewares/catchAsyncErrors");
 const dotenv = require("dotenv");
 
-//setting up config file
 dotenv.config({ path: "./config/config.env" });
+
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
-// Create a new order   =>  /api/v1/order/new
+// =============================================
+// Create New Order
+// =============================================
 exports.newOrder = catchAsyncErrors(async (req, res, next) => {
-  // console.log("id", req.body);
-  const { session_id } = req.body;
+  try {
+    const { session_id } = req.body;
 
-  const session = await stripe.checkout.sessions.retrieve(session_id, {
-    expand: ["customer"],
-  });
-  console.log(session);
-  const cart = await Cart.findOne({ user: req.user._id })
-    .populate({
-      path: "items.foodItem",
-      select: "name price images",
-    })
-    .populate({
-      path: "restaurant",
-      select: "name",
+    console.log("Session ID:", session_id);
+    console.log("Logged User:", req.user);
+
+    if (!session_id) {
+      return next(new ErrorHandler("Session ID is missing", 400));
+    }
+
+    // Get Stripe Session
+    const session = await stripe.checkout.sessions.retrieve(session_id);
+
+    console.log("Stripe Session Retrieved");
+
+    // Get User Cart
+    const cart = await Cart.findOne({ user: req.user._id })
+      .populate({
+        path: "items.foodItem",
+        select: "name price images",
+      })
+      .populate({
+        path: "restaurant",
+        select: "name",
+      });
+
+    console.log("Cart:", cart);
+
+    if (!cart) {
+      return next(new ErrorHandler("Cart not found", 404));
+    }
+
+    // Prepare delivery info safely
+    const deliveryInfo = {
+      address:
+        session.customer_details?.address?.line1 || "Not Provided",
+      city:
+        session.customer_details?.address?.city || "Not Provided",
+      postalCode:
+        session.customer_details?.address?.postal_code || "",
+      country:
+        session.customer_details?.address?.country || "",
+      phoneNo:
+        session.customer_details?.phone || "",
+    };
+
+    // Order Items
+    const orderItems = cart.items.map((item) => ({
+      name: item.foodItem.name,
+      quantity: item.quantity,
+      image: item.foodItem.images[0]?.url || "",
+      price: item.foodItem.price,
+      fooditem: item.foodItem._id,
+    }));
+
+    const paymentInfo = {
+      id: session.payment_intent,
+      status: session.payment_status,
+    };
+
+    console.log("Creating Order...");
+
+    const order = await Order.create({
+      orderItems,
+      deliveryInfo,
+      paymentInfo,
+      deliveryCharge:
+        session.shipping_cost
+          ? session.shipping_cost.amount_total / 100
+          : 0,
+      itemsPrice: session.amount_subtotal / 100,
+      finalTotal: session.amount_total / 100,
+      user: req.user._id,
+      restaurant: cart.restaurant._id,
+      paidAt: Date.now(),
     });
-  console.log(cart);
 
-  let deliveryInfo = {
-    address:
-      session.shipping_details.address.line1 +
-      " " +
-      session.shipping_details.address.line1,
-    city: session.shipping_details.address.city,
-    phoneNo: session.customer_details.phone,
-    postalCode: session.shipping_details.address.postal_code,
-    country: session.shipping_details.address.country,
-  };
-  let orderItems = cart.items.map((item) => ({
-    name: item.foodItem.name,
-    quantity: item.quantity,
-    image: item.foodItem.images[0].url,
-    price: item.foodItem.price,
-    fooditem: item.foodItem._id,
-  }));
+    console.log("Order Created:", order);
 
-  let paymentInfo = {
-    id: session.payment_intent,
-    status: session.payment_status,
-  };
+    // Delete Cart
+    await Cart.findOneAndDelete({ user: req.user._id });
 
-  const order = await Order.create({
-    orderItems,
-    deliveryInfo,
-    paymentInfo,
-    deliveryCharge: +session.shipping_cost.amount_subtotal / 100,
-    itemsPrice: +session.amount_subtotal / 100,
-    finalTotal: +session.amount_total / 100,
-    user: req.user.id,
-    restaurant: cart.restaurant._id,
-    paidAt: Date.now(),
-  });
-  console.log(order);
-
-  await Cart.findOneAndDelete({ user: req.user._id });
-
-  res.status(200).json({
-    success: true,
-    order,
-  });
+    res.status(200).json({
+      success: true,
+      order,
+    });
+  } catch (err) {
+    console.log("ORDER ERROR:", err);
+    return next(err);
+  }
 });
 
-// Get single order   =>   /api/v1/orders/:id
+// =============================================
+// Get Single Order
+// =============================================
 exports.getSingleOrder = catchAsyncErrors(async (req, res, next) => {
   const order = await Order.findById(req.params.id)
     .populate("user", "name email")
-    .populate("restaurant")
-    .exec();
+    .populate("restaurant");
 
   if (!order) {
-    return next(new ErrorHandler("No Order found with this ID", 404));
+    return next(new ErrorHandler("Order not found", 404));
   }
 
   res.status(200).json({
@@ -91,15 +122,15 @@ exports.getSingleOrder = catchAsyncErrors(async (req, res, next) => {
   });
 });
 
-// Get logged in user orders   =>   /api/v1/orders/me
+// =============================================
+// Logged-in User Orders
+// =============================================
 exports.myOrders = catchAsyncErrors(async (req, res, next) => {
-  // Get the user ID from req.user
-  const userId = new ObjectId(req.user.id);
-  // Find orders for the specific user using the retrieved user ID
-  const orders = await Order.find({ user: userId })
-    .populate("user", "name email")
+  const orders = await Order.find({
+    user: req.user._id,
+  })
     .populate("restaurant")
-    .exec();
+    .populate("user", "name email");
 
   res.status(200).json({
     success: true,
@@ -107,7 +138,9 @@ exports.myOrders = catchAsyncErrors(async (req, res, next) => {
   });
 });
 
-// Get all orders - ADMIN  =>   /api/v1/admin/orders/
+// =============================================
+// Admin - All Orders
+// =============================================
 exports.allOrders = catchAsyncErrors(async (req, res, next) => {
   const orders = await Order.find();
 

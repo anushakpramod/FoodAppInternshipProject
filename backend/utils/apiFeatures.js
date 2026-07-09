@@ -1,37 +1,3 @@
-
-// We are creating an APIFeatures utility class.
-
-// We write:
-// To add powerful features like searching, filtering, sorting, and pagination to our API without repeating code in every controller.
-
-// We use:
-// Whenever the client sends query parameters in the URL to customize the data they want.
-
-// What does it do?
-
-// search() → Finds products based on keywords.
-// Example:
-// /products?keyword=pizza
-
-// filter() → Filters products based on conditions like price or ratings.
-// Example:
-// /products?price[gte]=100&price[lte]=500
-
-// sort() → Sorts products by ratings or reviews.
-// Example:
-// /products?sortBy=ratings
-
-// pagination() → Splits results into pages.
-// Example:
-// /products?page=2
-
-// APIFeatures helps users search, filter, sort, and view data page by page, making our APIs flexible and user-friendly.
-
-// Think of Amazon: you search for a product, filter by price, sort by ratings, and move to the next page. APIFeatures gives our API the same capabilities.
-
-
-
-
 class APIFeatures {
   // query = Product.find()
 
